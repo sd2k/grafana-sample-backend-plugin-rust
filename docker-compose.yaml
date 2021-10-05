@@ -1,0 +1,51 @@
+version: "3"
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "6831:6831/udp"
+      - "16686:16686"
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    restart: on-failure
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_DEFAULT_APP_MODE: development
+      GF_LOG_LEVEL: debug
+      GF_LOG_FILTERS: plugins:debug
+      GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: "true"
+      GF_PLUGINS_ENABLE_ALPHA: "true"
+      GF_SERVER_ROOT_URL: http://admin:admin@grafana:3000
+      JAEGER_AGENT_HOST: "jaeger"
+    volumes:
+      - "./grafana/provisioning:/etc/grafana/provisioning"
+      - ".:/var/lib/grafana/plugins/grafana-sample-backend-plugin-rust"
+
+  frontend:
+    image: node:14
+    command:
+      - sh
+      - -c
+      - 'yarn && yarn start'
+    working_dir: /home/node/app
+    volumes:
+      - ".:/home/node/app"
+
+  backend:
+    build: .
+    volumes:
+      - "./backend:/usr/src/backend"
+      - "./dist:/usr/src/dist"
+    command:
+      - cargo
+      - watch
+      - --why
+      - -x
+      - build
+      - -s
+      - rm -rf /usr/src/dist/gpx_grafana-sample-backend-plugin-rust_linux_amd64 && cp target/debug/grafana-sample-backend-plugin-rust /usr/src/dist/gpx_sample-backend-plugin-rust_linux_arm64

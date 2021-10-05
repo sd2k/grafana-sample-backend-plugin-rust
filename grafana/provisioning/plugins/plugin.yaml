@@ -1,0 +1,5 @@
+apiVersion: 1
+
+datasources:
+  - type: grafana-sample-backend-plugin-rust
+    disabled: false
