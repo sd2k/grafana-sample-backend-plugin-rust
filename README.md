@@ -1,18 +1,34 @@
-# Grafana Data Source Backend Plugin Template
+# Grafana Backend Plugin Sample in Rust
 
-[![Build](https://github.com/grafana/grafana-starter-datasource-backend/workflows/CI/badge.svg)](https://github.com/grafana/grafana-datasource-backend/actions?query=workflow%3A%22CI%22)
+This is a sample plugin for building Grafana Backend Plugins using the Rust SDK.
 
-This template is a starting point for building Grafana Data Source Backend Plugins
+## What is Grafana Backend Plugin?
 
-## What is Grafana Data Source Backend Plugin?
+Grafana Backend Plugins are plugins that comprise both a frontend _and_ backend component. They can provide datasource implementations in cases where the datasource cannot be communicated with by the browser using HTTP, or can provide entire app experiences inside Grafana, or even the two combined.
 
-Grafana supports a wide range of data sources, including Prometheus, MySQL, and even Datadog. There’s a good chance you can already visualize metrics from the systems you have set up. In some cases, though, you already have an in-house metrics solution that you’d like to add to your Grafana dashboards. Grafana Data Source Plugins enables integrating such solutions with Grafana.
+This sample app contains a backend datasource plugin, but the backend component also implements a few other backend services just to serve as an example.
 
 For more information about backend plugins, refer to the documentation on [Backend plugins](https://grafana.com/docs/grafana/latest/developers/plugins/backend/).
 
 ## Getting started
 
-A data source backend plugin consists of both frontend and backend components.
+### Docker-compose
+
+The simplest way to get started is with the included docker-compose file. Simply run
+
+```bash
+docker-compose up
+```
+
+which will start three services:
+
+1. A Grafana instance set up for development mode, serving on port 3000
+2. A frontend build service, which watches for changes and builds the frontend
+3. A backend build service, which watches for changes, builds the backend, moves the binary into the correct location, and signals the current backend component to restart.
+
+Note that if you are on a Mac, the build services may run slowly as they have to use emulation.
+
+A backend plugin consists of both frontend and backend components.
 
 ### Frontend
 
@@ -42,23 +58,25 @@ A data source backend plugin consists of both frontend and backend components.
 
 ### Backend
 
-1. Update [Grafana plugin SDK for Go](https://grafana.com/docs/grafana/latest/developers/plugins/backend/grafana-plugin-sdk-for-go/) dependency to the latest minor version:
+1. Ensure you have a recent version of Rust installed. [rustup](https://rustup.rs/) is the recommended installation method.
 
    ```bash
-   go get -u github.com/grafana/grafana-plugin-sdk-go
-   go mod tidy
+   rustup update
    ```
 
-2. Build backend plugin binaries for Linux, Windows and Darwin:
+2. Build the backend plugin in debug mode, then copy it to the `dist` directory with the correct name so that Grafana picks it up.
 
    ```bash
-   mage -v
-   ```
+   cd backend
+   export GOARCH=darwin_arm64  # replace with your GOARCH
+   cargo build
+   cp target/debug/grafana-sample-backend-plugin-rust ../dist/gpx_grafana-sample-backend-plugin-rust_${GOARCH}
 
-3. List all available Mage targets for additional commands:
+   # or, using cargo-watch
 
-   ```bash
-   mage -l
+   cd backend
+   export GOARCH=darwin_arm64  # replace with your GOARCH
+   cargo watch --why -x build -s 'rm ../dist/gpx_grafana-sample-backend-plugin-rust_${GOARCH} && cp target/debug/grafana-sample-backend-plugin-rust ../dist/gpx_grafana-sample-backend-plugin-rust_${GOARCH}' -c -w . 
    ```
 
 ## Learn more
@@ -67,4 +85,4 @@ A data source backend plugin consists of both frontend and backend components.
 - [Grafana documentation](https://grafana.com/docs/)
 - [Grafana Tutorials](https://grafana.com/tutorials/) - Grafana Tutorials are step-by-step guides that help you make the most of Grafana
 - [Grafana UI Library](https://developers.grafana.com/ui) - UI components to help you build interfaces using Grafana Design System
-- [Grafana plugin SDK for Go](https://grafana.com/docs/grafana/latest/developers/plugins/backend/grafana-plugin-sdk-for-go/)
+- [Grafana plugin SDK for Rust](https://github.com/sd2k/grafana-plugin-sdk-rust)
