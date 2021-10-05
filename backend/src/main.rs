@@ -160,6 +160,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let plugin = MyPluginService::new();
 
     backend::Plugin::new()
+        .shutdown_handler(10001)
         .data_service(plugin.clone())
         .stream_service(plugin)
         .start(listener)

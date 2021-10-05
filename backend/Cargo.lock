@@ -230,7 +230,7 @@ dependencies = [
 [[package]]
 name = "grafana-plugin-sdk"
 version = "0.1.0"
-source = "git+https://github.com/sd2k/grafana-plugin-sdk-rust?branch=add-wrapper-struct#51ec506a4025523b5f85d1e905ede306f1c8a4f4"
+source = "git+https://github.com/sd2k/grafana-plugin-sdk-rust?branch=add-wrapper-struct#f4812b0db00b9f2a08dda15c2442e84f7bab2dfd"
 dependencies = [
  "arrow2",
  "chrono",
