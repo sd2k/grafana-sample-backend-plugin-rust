@@ -22,6 +22,7 @@ services:
       GF_PLUGINS_ENABLE_ALPHA: "true"
       GF_SERVER_ROOT_URL: http://admin:admin@grafana:3000
       JAEGER_AGENT_HOST: "jaeger"
+      RUST_LOG: grafana_plugin_sdk=debug,info
     volumes:
       - "./grafana/provisioning:/etc/grafana/provisioning"
       - ".:/var/lib/grafana/plugins/grafana-sample-backend-plugin-rust"

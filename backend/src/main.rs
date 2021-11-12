@@ -6,11 +6,12 @@ use std::{
     time::Duration,
 };
 
+use bytes::Bytes;
 use chrono::prelude::*;
 use http::Response;
 use thiserror::Error;
-use tokio::sync::RwLock;
 use tokio_stream::StreamExt;
+use tracing::{debug, info};
 
 use grafana_plugin_sdk::{backend, data, prelude::*};
 
@@ -38,16 +39,14 @@ impl backend::DataQueryError for QueryError {
 #[backend::async_trait]
 impl backend::DataService for MyPluginService {
     type QueryError = QueryError;
-    type Iter = std::iter::Map<
-        std::vec::IntoIter<backend::DataQuery>,
-        fn(backend::DataQuery) -> Result<backend::DataResponse, Self::QueryError>,
-    >;
+    type Iter = backend::BoxDataResponseIter<Self::QueryError>;
     async fn query_data(&self, request: backend::QueryDataRequest) -> Self::Iter {
-        request.queries.into_iter().map(|x| {
+        info!(rows = 3, "Querying data");
+        Box::new(request.queries.into_iter().map(move |x| {
             // Here we create a single response Frame for each query.
             // Frames can be created from iterators of fields using [`IntoFrame`].
             Ok(backend::DataResponse::new(
-                x.ref_id,
+                x.ref_id.clone(),
                 vec![[
                     // Fields can be created from iterators of a variety of
                     // relevant datatypes.
@@ -60,15 +59,22 @@ impl backend::DataService for MyPluginService {
                     [1_u32, 2, 3].into_field("x"),
                     ["a", "b", "c"].into_field("y"),
                 ]
-                .into_frame("foo")],
+                .into_frame("foo")
+                .check()
+                .map_err(|_| QueryError { ref_id: x.ref_id })?],
             ))
-        })
+        }))
     }
 }
 
 #[derive(Debug, Error)]
 #[error("Error streaming data")]
-struct StreamError;
+enum StreamError {
+    #[error("Error converting frame: {0}")]
+    Conversion(#[from] backend::ConvertToError),
+    #[error("Invalid frame returned: {0}")]
+    InvalidFrame(#[from] data::Error),
+}
 
 #[backend::async_trait]
 impl backend::StreamService for MyPluginService {
@@ -77,7 +83,7 @@ impl backend::StreamService for MyPluginService {
         &self,
         request: backend::SubscribeStreamRequest,
     ) -> backend::SubscribeStreamResponse {
-        eprintln!("Subscribing to stream");
+        info!(path = %request.path, "Subscribing to stream");
         let status = if request.path == "stream" {
             backend::SubscribeStreamStatus::Ok
         } else {
@@ -91,28 +97,21 @@ impl backend::StreamService for MyPluginService {
 
     type StreamError = StreamError;
     type Stream = backend::BoxRunStream<Self::StreamError>;
-    async fn run_stream(&self, _request: backend::RunStreamRequest) -> Self::Stream {
-        eprintln!("Running stream");
-        let mut frame = data::Frame::new("foo");
-        let initial_data: [u32; 0] = [];
-        frame.add_field(initial_data.into_field("x"));
+    async fn run_stream(&self, request: backend::RunStreamRequest) -> Self::Stream {
+        info!(path = %request.path, "Running stream");
         let mut x = 0u32;
         let n = 3;
-        let frame = Arc::new(RwLock::new(frame));
+        let mut frame = data::Frame::new("foo");
         Box::pin(
-            async_stream::stream! {
+            async_stream::try_stream! {
                 loop {
-                    let frame = Arc::clone(&frame);
-                    if frame.write().await.fields[0]
-                        .set_values(x..(x + n))
-                        .is_ok()
-                    {
-                        eprintln!("Yielding frame from {} to {}", x, x+n);
-                        x += n;
-                        yield Ok(backend::StreamPacket::MutableFrame(frame))
-                    } else {
-                        yield Err(StreamError)
-                    }
+                    frame.fields_mut()[0].set_values(
+                        (x..x+n)
+                    )?;
+                    let packet = backend::StreamPacket::from_frame(frame.check()?)?;
+                    debug!("Yielding frame from {} to {}", x, x+n);
+                    yield packet;
+                    x += n;
                 }
             }
             .throttle(Duration::from_secs(1)),
@@ -123,47 +122,62 @@ impl backend::StreamService for MyPluginService {
         &self,
         _request: backend::PublishStreamRequest,
     ) -> backend::PublishStreamResponse {
-        eprintln!("Publishing to stream");
+        info!("Publishing to stream");
         todo!()
     }
 }
 
 #[backend::async_trait]
 impl backend::ResourceService for MyPluginService {
+    type InitialResponse = Response<Bytes>;
     type Error = http::Error;
     type Stream = backend::BoxResourceStream<Self::Error>;
-    async fn call_resource(&self, r: backend::CallResourceRequest) -> Self::Stream {
+    async fn call_resource(
+        &self,
+        r: backend::CallResourceRequest,
+    ) -> (Result<Self::InitialResponse, Self::Error>, Self::Stream) {
         let count = Arc::clone(&self.0);
-        Box::pin(async_stream::stream! {
-            match r.request.uri().path() {
-                "/echo" => {
-                    yield Ok(Response::new(r.request.uri().to_string().into_bytes()));
-                    yield Ok(Response::new(format!("{:?}", r.request.headers()).into_bytes()));
-                    yield Ok(Response::new(r.request.into_body()));
-                },
-                "/count" => {
-                    yield Ok(Response::new(
-                        count.fetch_add(1, Ordering::SeqCst)
+        let (response, stream): (_, Self::Stream) = match r.request.uri().path() {
+            // Just send back a single response.
+            "/echo" => (
+                Ok(Response::new(r.request.into_body())),
+                Box::pin(futures::stream::empty()),
+            ),
+            // Send an initial response with the current count, then stream the gradually
+            // incrementing count back to the client.
+            "/count" => (
+                Ok(Response::new(
+                    count
+                        .fetch_add(1, Ordering::SeqCst)
                         .to_string()
                         .into_bytes()
-                    ))
-                },
-                _ => yield Response::builder().status(404).body(vec![]),
-            }
-        })
+                        .into(),
+                )),
+                Box::pin(async_stream::try_stream! {
+                    loop {
+                        let body = count
+                            .fetch_add(1, Ordering::SeqCst)
+                            .to_string()
+                            .into_bytes()
+                            .into();
+                        yield body;
+                    }
+                }),
+            ),
+            _ => (
+                Response::builder().status(404).body(Bytes::new()),
+                Box::pin(futures::stream::empty()),
+            ),
+        };
+        (response, stream)
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let listener = backend::initialize().await?;
-    let plugin = MyPluginService::new();
-
-    backend::Plugin::new()
-        .shutdown_handler(10001)
-        .data_service(plugin.clone())
-        .stream_service(plugin)
-        .start(listener)
-        .await?;
-    Ok(())
+#[grafana_plugin_sdk::main(
+    services(data, resource, stream),
+    init_subscriber = true,
+    shutdown_handler = "0.0.0.0:10002"
+)]
+async fn plugin() -> MyPluginService {
+    MyPluginService::new()
 }

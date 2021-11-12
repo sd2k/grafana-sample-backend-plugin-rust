@@ -1,14 +1,16 @@
 [package]
 name = "grafana-sample-backend-plugin-rust"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 async-stream = "0.3.2"
 async-trait = "0.1.51"
+bytes = "1.1.0"
 chrono = "0.4.19"
-grafana-plugin-sdk = { git = "https://github.com/sd2k/grafana-plugin-sdk-rust", branch = "add-wrapper-struct" }
+grafana-plugin-sdk = { git = "https://github.com/sd2k/grafana-plugin-sdk-rust" }
+futures = "0.3.17"
 http = "0.2.5"
-thiserror = "1.0.29"
-tokio = { version = "1.12.0", features = ["rt-multi-thread"] }
-tokio-stream = "0.1.7"
+thiserror = "1.0.30"
+tokio-stream = "0.1.8"
+tracing = "0.1.29"
