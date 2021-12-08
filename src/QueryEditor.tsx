@@ -11,9 +11,9 @@ const { FormField, Switch } = LegacyForms;
 type Props = QueryEditorProps<DataSource, MyQuery, MyDataSourceOptions>;
 
 export class QueryEditor extends PureComponent<Props> {
-  onQueryTextChange = (event: ChangeEvent<HTMLInputElement>) => {
+  onPathChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { onChange, query } = this.props;
-    onChange({ ...query, queryText: event.target.value });
+    onChange({ ...query, path: event.target.value });
   };
 
   onConstantChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -32,7 +32,7 @@ export class QueryEditor extends PureComponent<Props> {
 
   render() {
     const query = defaults(this.props.query, defaultQuery);
-    const { queryText, constant, withStreaming } = query;
+    const { path, constant, withStreaming } = query;
 
     return (
       <div className="gf-form">
@@ -46,8 +46,8 @@ export class QueryEditor extends PureComponent<Props> {
         />
         <FormField
           labelWidth={8}
-          value={queryText || ''}
-          onChange={this.onQueryTextChange}
+          value={path || ''}
+          onChange={this.onPathChange}
           label="Query Text"
           tooltip="Not used yet"
         />

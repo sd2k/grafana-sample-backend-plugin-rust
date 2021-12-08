@@ -295,7 +295,8 @@ dependencies = [
 [[package]]
 name = "grafana-plugin-sdk"
 version = "0.1.0"
-source = "git+https://github.com/sd2k/grafana-plugin-sdk-rust#6efe6d1366b04868329d00c17a4be0e181792251"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fa8398a831e68f845639b826d58a84062289e8916ac896148cb5afd4c07a8c2"
 dependencies = [
  "arrow2",
  "chrono",
@@ -327,7 +328,8 @@ dependencies = [
 [[package]]
 name = "grafana-plugin-sdk-macros"
 version = "0.1.0"
-source = "git+https://github.com/sd2k/grafana-plugin-sdk-rust#6efe6d1366b04868329d00c17a4be0e181792251"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed70fbbe5265abdae663cb8a401943ef1e7c019afbd4aab6380b362137af43f7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -346,6 +348,7 @@ dependencies = [
  "grafana-plugin-sdk",
  "http",
  "thiserror",
+ "tokio",
  "tokio-stream",
  "tracing",
 ]

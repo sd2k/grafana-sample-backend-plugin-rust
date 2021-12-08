@@ -1,7 +1,7 @@
 import { DataQuery, DataSourceJsonData } from '@grafana/data';
 
 export interface MyQuery extends DataQuery {
-  queryText?: string;
+  path?: string;
   constant: number;
   withStreaming: boolean;
 }
