@@ -10,7 +10,7 @@ use std::{
 
 use bytes::Bytes;
 use chrono::prelude::*;
-use futures::Stream;
+use futures::{stream::FuturesOrdered, Stream};
 use http::Response;
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -43,43 +43,52 @@ impl backend::DataQueryError for QueryError {
 #[backend::async_trait]
 impl backend::DataService for MyPluginService {
     type QueryError = QueryError;
-    type Iter = backend::BoxDataResponseIter<Self::QueryError>;
-    async fn query_data(&self, request: backend::QueryDataRequest) -> Self::Iter {
+    type Stream = backend::BoxDataResponseStream<Self::QueryError>;
+    async fn query_data(&self, request: backend::QueryDataRequest) -> Self::Stream {
+        let uid = request
+            .plugin_context
+            .datasource_instance_settings
+            .as_ref()
+            .map(|ds| ds.uid.clone());
+
         info!(rows = 3, "Querying data");
-        Box::new(request.queries.into_iter().map(move |x| {
-            let uid = request
-                .plugin_context
-                .datasource_instance_settings
-                .as_ref()
-                .map(|ds| ds.uid.clone());
+        Box::pin(
+            request
+                .queries
+                .into_iter()
+                .map(|x| {
+                    let uid = uid.clone();
+                    async move {
+                        // Here we create a single response Frame for each query.
+                        // Frames can be created from iterators of fields using [`IntoFrame`].
+                        let mut frame = [
+                            // Fields can be created from iterators of a variety of
+                            // relevant datatypes.
+                            [
+                                Utc.ymd(2021, 1, 1).and_hms(12, 0, 0),
+                                Utc.ymd(2021, 1, 1).and_hms(12, 0, 1),
+                                Utc.ymd(2021, 1, 1).and_hms(12, 0, 2),
+                            ]
+                            .into_field("time"),
+                            [1_u32, 2, 3].into_field("x"),
+                            ["a", "b", "c"].into_field("y"),
+                        ]
+                        .into_frame("foo");
 
-            // Here we create a single response Frame for each query.
-            // Frames can be created from iterators of fields using [`IntoFrame`].
-            let mut frame = [
-                // Fields can be created from iterators of a variety of
-                // relevant datatypes.
-                [
-                    Utc.ymd(2021, 1, 1).and_hms(12, 0, 0),
-                    Utc.ymd(2021, 1, 1).and_hms(12, 0, 1),
-                    Utc.ymd(2021, 1, 1).and_hms(12, 0, 2),
-                ]
-                .into_field("time"),
-                [1_u32, 2, 3].into_field("x"),
-                ["a", "b", "c"].into_field("y"),
-            ]
-            .into_frame("foo");
+                        if let Some(uid) = &uid {
+                            if let Some("stream") = x.json.get("path").and_then(|x| x.as_str()) {
+                                frame.set_channel(format!("ds/{}/stream", uid).parse().unwrap());
+                            }
+                        }
 
-            if let Some(uid) = &uid {
-                if let Some("stream") = x.json.get("path").and_then(|x| x.as_str()) {
-                    frame.set_channel(format!("ds/{}/stream", uid).parse().unwrap());
-                }
-            }
-
-            Ok(backend::DataResponse::new(
-                x.ref_id.clone(),
-                vec![frame.check().map_err(|_| QueryError { ref_id: x.ref_id })?],
-            ))
-        }))
+                        Ok(backend::DataResponse::new(
+                            x.ref_id.clone(),
+                            vec![frame.check().map_err(|_| QueryError { ref_id: x.ref_id })?],
+                        ))
+                    }
+                })
+                .collect::<FuturesOrdered<_>>(),
+        )
     }
 }
 
@@ -112,15 +121,12 @@ impl backend::StreamService for MyPluginService {
         request: backend::SubscribeStreamRequest,
     ) -> Result<backend::SubscribeStreamResponse, Self::Error> {
         info!(path = %request.path, "Subscribing to stream");
-        let status = if request.path == "stream" {
+        let status = if request.path.as_str() == "stream" {
             backend::SubscribeStreamStatus::Ok
         } else {
             backend::SubscribeStreamStatus::NotFound
         };
-        Ok(backend::SubscribeStreamResponse {
-            status,
-            initial_data: None,
-        })
+        Ok(backend::SubscribeStreamResponse::new(status, None))
     }
 
     type Error = StreamError;
