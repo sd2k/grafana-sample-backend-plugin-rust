@@ -5,6 +5,7 @@
   "id": "grafana-sample-backend-plugin-rust",
   "metrics": true,
   "backend": true,
+  "streaming": true,
   "executable": "gpx_sample-backend-plugin-rust",
   "info": {
     "description": "Sample backend plugin written in Rust",

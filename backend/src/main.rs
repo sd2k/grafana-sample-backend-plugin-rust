@@ -135,24 +135,28 @@ impl backend::StreamService for MyPluginService {
         request: backend::RunStreamRequest,
     ) -> Result<Self::Stream, Self::Error> {
         info!(path = %request.path, "Running stream");
-        let mut x = 0u32;
+        let mut x = 0u8;
         let n = 3;
-        let initial_data: [u32; 0] = [];
-        let mut frame = data::Frame::new("foo").with_field(initial_data.into_field("x"));
-
+        let mut frame = data::Frame::new("foo").with_field(
+            [
+                Utc.ymd(2021, 1, 1).and_hms(12, 0, 0),
+                Utc.ymd(2021, 1, 1).and_hms(12, 0, 1),
+                Utc.ymd(2021, 1, 1).and_hms(12, 0, 2),
+            ]
+            .into_field("Time"),
+        );
         let stream = Box::pin(
             async_stream::try_stream! {
                 loop {
-                    frame.fields_mut()[0].set_values(
-                        (x..x+n)
-                    )?;
+                    frame.add_field((x..x+n).into_field((b'a' + (x/3)).to_string()));
                     let packet = backend::StreamPacket::from_frame(frame.check()?)?;
                     debug!("Yielding frame from {} to {}", x, x+n);
                     yield packet;
                     x += n;
                 }
             }
-            .throttle(Duration::from_secs(1)),
+            .throttle(Duration::from_secs(1))
+            .take(10),
         );
 
         let (tx, rx) = oneshot::channel();
