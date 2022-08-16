@@ -70,13 +70,13 @@ A backend plugin consists of both frontend and backend components.
    cd backend
    export GOARCH=darwin_arm64  # replace with your GOARCH
    cargo build
-   cp target/debug/grafana-sample-backend-plugin-rust ../dist/gpx_grafana-sample-backend-plugin-rust_${GOARCH}
+   cp target/debug/grafana-sample-backend-plugin-rust ../dist/gpx_sample-backend-plugin-rust_${GOARCH}
 
    # or, using cargo-watch
 
    cd backend
    export GOARCH=darwin_arm64  # replace with your GOARCH
-   cargo watch --why -x build -s 'rm ../dist/gpx_grafana-sample-backend-plugin-rust_${GOARCH} && cp target/debug/grafana-sample-backend-plugin-rust ../dist/gpx_grafana-sample-backend-plugin-rust_${GOARCH}' -c -w . 
+   cargo watch --why -x build -s 'rm -f ../dist/gpx_sample-backend-plugin-rust_${GOARCH} && cp target/debug/grafana-sample-backend-plugin-rust ../dist/gpx_sample-backend-plugin-rust_${GOARCH}' -c -w .
    ```
 
 ## Learn more
