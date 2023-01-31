@@ -12,6 +12,7 @@ use bytes::Bytes;
 use chrono::prelude::*;
 use futures::{stream::FuturesOrdered, Stream};
 use http::Response;
+use serde::Deserialize;
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tokio_stream::StreamExt;
@@ -40,11 +41,21 @@ impl backend::DataQueryError for QueryError {
     }
 }
 
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct MyQuery {
+    path: Option<String>,
+    constant: f64,
+    #[serde(rename = "withStreaming")]
+    with_streaming: bool,
+}
+
 #[backend::async_trait]
 impl backend::DataService for MyPluginService {
+    type Query = MyQuery;
     type QueryError = QueryError;
     type Stream = backend::BoxDataResponseStream<Self::QueryError>;
-    async fn query_data(&self, request: backend::QueryDataRequest) -> Self::Stream {
+    async fn query_data(&self, request: backend::QueryDataRequest<Self::Query>) -> Self::Stream {
         let uid = request
             .plugin_context
             .datasource_instance_settings
@@ -65,9 +76,9 @@ impl backend::DataService for MyPluginService {
                             // Fields can be created from iterators of a variety of
                             // relevant datatypes.
                             [
-                                Utc.ymd(2021, 1, 1).and_hms(12, 0, 0),
-                                Utc.ymd(2021, 1, 1).and_hms(12, 0, 1),
-                                Utc.ymd(2021, 1, 1).and_hms(12, 0, 2),
+                                Utc.with_ymd_and_hms(2021, 1, 1, 12, 0, 0).single().unwrap(),
+                                Utc.with_ymd_and_hms(2021, 1, 1, 12, 0, 1).single().unwrap(),
+                                Utc.with_ymd_and_hms(2021, 1, 1, 12, 0, 2).single().unwrap(),
                             ]
                             .into_field("time"),
                             [1_u32, 2, 3].into_field("x"),
@@ -76,8 +87,8 @@ impl backend::DataService for MyPluginService {
                         .into_frame("foo");
 
                         if let Some(uid) = &uid {
-                            if let Some("stream") = x.json.get("path").and_then(|x| x.as_str()) {
-                                frame.set_channel(format!("ds/{}/stream", uid).parse().unwrap());
+                            if let Some("stream") = x.query.path.as_deref() {
+                                frame.set_channel(format!("ds/{uid}/stream").parse().unwrap());
                             }
                         }
 
@@ -167,7 +178,7 @@ impl backend::StreamService for MyPluginService {
                 "client disconnected for {}path {}",
                 datasource_id
                     .as_ref()
-                    .map(|x| format!("datasource {}, ", x))
+                    .map(|x| format!("datasource {x}, "))
                     .unwrap_or_else(|| "".to_string()),
                 path
             );
