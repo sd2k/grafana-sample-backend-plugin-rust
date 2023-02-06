@@ -15,4 +15,4 @@ serde = { version = "1.0.152", features = ["derive"] }
 thiserror = "1.0.30"
 tokio-stream = "0.1.8"
 tracing = "0.1.29"
-tokio = "1.18.4"
+tokio = "1.18.5"
