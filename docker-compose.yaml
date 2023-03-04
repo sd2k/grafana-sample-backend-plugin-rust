@@ -51,4 +51,4 @@ services:
       - -x
       - build
       - -s
-      - rm -rf /usr/src/dist/gpx_sample-backend-plugin-rust_linux_amd64 && cp target/debug/grafana-sample-backend-plugin-rust /usr/src/dist/gpx_sample-backend-plugin-rust_linux_arm64 && nc -z grafana 10001
+      - rm -rf /usr/src/dist/gpx_sample-backend-plugin-rust_linux_amd64 && cp target/debug/grafana-sample-backend-plugin-rust /usr/src/dist/gpx_sample-backend-plugin-rust_linux_amd64 && nc -z grafana 10001
