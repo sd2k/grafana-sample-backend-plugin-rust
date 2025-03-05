@@ -20,7 +20,8 @@ use tracing::{debug, info};
 
 use grafana_plugin_sdk::{backend, data, prelude::*};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, GrafanaPlugin)]
+#[grafana_plugin(plugin_type = "datasource")]
 struct MyPluginService(Arc<AtomicUsize>);
 
 impl MyPluginService {
@@ -50,15 +51,18 @@ struct MyQuery {
     with_streaming: bool,
 }
 
-#[backend::async_trait]
+#[async_trait::async_trait]
 impl backend::DataService for MyPluginService {
     type Query = MyQuery;
     type QueryError = QueryError;
     type Stream = backend::BoxDataResponseStream<Self::QueryError>;
-    async fn query_data(&self, request: backend::QueryDataRequest<Self::Query>) -> Self::Stream {
+    async fn query_data(
+        &self,
+        request: backend::QueryDataRequest<Self::Query, Self>,
+    ) -> Self::Stream {
         let uid = request
             .plugin_context
-            .datasource_instance_settings
+            .instance_settings
             .as_ref()
             .map(|ds| ds.uid.clone());
 
@@ -124,12 +128,12 @@ where
     }
 }
 
-#[backend::async_trait]
+#[async_trait::async_trait]
 impl backend::StreamService for MyPluginService {
     type JsonValue = ();
     async fn subscribe_stream(
         &self,
-        request: backend::SubscribeStreamRequest,
+        request: backend::SubscribeStreamRequest<Self>,
     ) -> Result<backend::SubscribeStreamResponse, Self::Error> {
         info!(path = %request.path, "Subscribing to stream");
         if request.path.as_str() == "stream" {
@@ -143,7 +147,7 @@ impl backend::StreamService for MyPluginService {
     type Stream = ClientDisconnect<backend::BoxRunStream<Self::Error>>;
     async fn run_stream(
         &self,
-        request: backend::RunStreamRequest,
+        request: backend::RunStreamRequest<Self>,
     ) -> Result<Self::Stream, Self::Error> {
         info!(path = %request.path, "Running stream");
         let mut x = 0u32;
@@ -154,9 +158,7 @@ impl backend::StreamService for MyPluginService {
         let stream = Box::pin(
             async_stream::try_stream! {
                 loop {
-                    frame.fields_mut()[0].set_values(
-                        (x..x+n)
-                    )?;
+                    frame.fields_mut()[0].set_values(x..x+n)?;
                     let packet = backend::StreamPacket::from_frame(frame.check()?)?;
                     debug!("Yielding frame from {} to {}", x, x+n);
                     yield packet;
@@ -167,10 +169,7 @@ impl backend::StreamService for MyPluginService {
         );
 
         let (tx, rx) = oneshot::channel();
-        let datasource_id = request
-            .plugin_context
-            .datasource_instance_settings
-            .map(|x| x.uid);
+        let datasource_id = request.plugin_context.instance_settings.map(|x| x.uid);
         let path = request.path;
         tokio::spawn(async move {
             let _ = rx.await;
@@ -188,7 +187,7 @@ impl backend::StreamService for MyPluginService {
 
     async fn publish_stream(
         &self,
-        _request: backend::PublishStreamRequest,
+        _request: backend::PublishStreamRequest<Self>,
     ) -> Result<backend::PublishStreamResponse, Self::Error> {
         info!("Publishing to stream");
         todo!()
@@ -217,14 +216,14 @@ impl backend::ErrIntoHttpResponse for ResourceError {
     }
 }
 
-#[backend::async_trait]
+#[async_trait::async_trait]
 impl backend::ResourceService for MyPluginService {
     type Error = ResourceError;
     type InitialResponse = http::Response<Bytes>;
     type Stream = backend::BoxResourceStream<Self::Error>;
     async fn call_resource(
         &self,
-        r: backend::CallResourceRequest,
+        r: backend::CallResourceRequest<Self>,
     ) -> Result<(Self::InitialResponse, Self::Stream), Self::Error> {
         let count = Arc::clone(&self.0);
         let response_and_stream = match r.request.uri().path() {
