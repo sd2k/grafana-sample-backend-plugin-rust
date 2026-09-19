@@ -262,7 +262,7 @@ impl backend::ResourceService for MyPluginService {
 #[grafana_plugin_sdk::main(
     services(data, resource, stream),
     init_subscriber = true,
-    shutdown_handler = "0.0.0.0:10002"
+    shutdown_handler = "0.0.0.0:10001"
 )]
 async fn plugin() -> MyPluginService {
     MyPluginService::new()
